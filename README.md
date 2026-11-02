@@ -1,6 +1,7 @@
 # Cybersecurity-study-documentation
 
 Directory map:
+
       [Lab_Writeup] contains my write up for any room and or challenge, specified via dates.
   
       [Tools] contain my write up on the usage of tools - how I used them, what I learned using them. Specified via dates.
