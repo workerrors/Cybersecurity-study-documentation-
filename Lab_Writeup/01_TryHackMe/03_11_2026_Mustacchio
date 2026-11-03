@@ -34,7 +34,7 @@ Cracked SHA-1 hash with Hashcat:
 
       echo "1868e36a6d2b17d4c2745f1659433a54d4bc5f4b" > hash.txt
       hashcat -m 100 hash.txt /usr/share/wordlists/rockyou.txt
-      # Result: bulldog19
+       Result: bulldog19
 
 
 Failed SSH login with admin:bulldog19
