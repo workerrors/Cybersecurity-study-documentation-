@@ -1,1 +1,72 @@
+Title: Mustacchio room
+
+  Date: 03/11/2026
+  Category: Reconnaissance, Vulnerability Analysis, Exploitation
+  
+  
+  Goal of the session:
+        Get root on mustacchio
+  
+  
+  Commands used in session:
+        "nmap -sV 10.113.146.201"
+
+Nmap revealed 2 open ports. 22 ssh - OpenSSH 7.2p2. And 80 http - Apache httpd 2.4.18
+
+
+
+Page source reveals nothing to work with on the site related to port 80. 
+No CVE's to get any extra information on the http service.
+A few CVE's for the ssh version, but nothing to help get credentials.
+
+
+
+Manual enumeration reveals nothing of much use to progress. 1) No login, search etc directories to use. 2) No domains that reveal anything. 
+3) what can be clicked/interacted with reveal nothing in source view. 
+
+
+  Commands used in session:
+        "gobuster dir -u http://[10.113.146.201] -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 10"
+gobuster revealed a few directories. Some was already known. 
+One that stands out is "custom".
+
+          "gobuster dir -u http://10.113.146.201/custom/ -w /usr/share/wordlists/dirb/common.txt -x php,html,txt -t 10"
+
+Scanning for any subdirs revealed a "users.bak" file.
+
+The users.bak file contained a name, admin, and hashcode, translating to bulldog19. Credentials do not work 
+on the SSH server.
+
+
+After seeing there were not any login directory pages I missed, I ran nmap again to check for any missed open ports.
+
+  Commands used in session:
+      "nmap -p- --min-rate 1000 10.113.146.201"
+
+This revealed port 8765, ultraseek-hhtp.
+
+Accessing this port revealed an admin login page, and viewing the page source, revealed a directory and name.
+
+      ""Example=/auth/dontforget.bak"
+
+The directory revealed an xml text. Using it to test whether or not the admin page parses such text, I went on to make
+an xml file to parse the .bak file, revealing a private SSH key. 
+
+The name revealed was Barry.
+
+Using ssh2john and john to crack the key enables us to get in as barry.
+
+A simple ls -la search would reveal that joe has a live_log. 
+
+A lack of a specified path on the command that joe is running was then used to perform a SUID path hijack to get root. 
+
+
+
+
+
+
+
+
+
+
 
