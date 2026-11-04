@@ -1,7 +1,7 @@
 When you're unsure if something is a file or directory, use ls -la /Placeholder/. It will show:
       d at the start = directory
       - at the start = regular file
-      -rwxr-xr-x = executable file (like solve)
+      -rwxr-xr-x = executable file (like Placeholder)
 
 
 
