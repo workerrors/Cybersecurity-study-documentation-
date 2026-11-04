@@ -5,3 +5,5 @@ Nmap scans the top 1000 ports by default. Convenient but makes it easier to miss
             #                  (bypasses default throttling on slow networks)
             
 Provided command can be used after an initial port scan, and manual enumeration, to see if anything was missed. 
+
+Learned through missed information on mustacchio, specifically not knowing where an admin credential can be used. 
